@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_resource'])) {
           $target_file = $upload_dir . $file_name;
 
           // Check file type
-          $allowed_types = ['pdf', 'epub'];
+          $allowed_types = ['pdf', 'epub', 'docX'];
           $file_extension = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
 
           if (in_array($file_extension, $allowed_types)) {
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_resource'])) {
                     $upload_message = "Error uploading file.";
                }
           } else {
-               $upload_message = "Only PDF and EPUB files are allowed.";
+               $upload_message = "Only PDF, DOCX and EPUB files are allowed.";
           }
      } else {
           $upload_message = "Please select a file to upload.";
@@ -84,7 +84,7 @@ $resources = $stmt->fetchAll();
           }
 
           body {
-               background: #f5f7fa;
+               background: #5f6b7cff;
                color: #333;
           }
 
@@ -365,12 +365,14 @@ $resources = $stmt->fetchAll();
                               <select id="format" name="format" required>
                                    <option value="PDF">PDF</option>
                                    <option value="EPUB">EPUB</option>
+                                   <option value="DOCX">DOCX</option>
                               </select>
                          </div>
 
                          <div class="form-group">
-                              <label for="resource_file">File (PDF/EPUB):</label>
-                              <input type="file" id="resource_file" name="resource_file" accept=".pdf,.epub" required>
+                              <label for="resource_file">File (PDF/EPUB/DOCX):</label>
+                              <input type="file" id="resource_file" name="resource_file" accept=".pdf,.epub,.docx"
+                                   required>
                          </div>
 
                          <button type="submit" name="upload_resource" class="btn">

@@ -20,14 +20,48 @@ try {
      die("Database connection failed: " . $e->getMessage());
 }
 
-// Fetch all available resources
-$stmt = $pdo->query("SELECT r.*, u.fullname as uploader_name FROM resources r JOIN users u ON r.uploaded_by = u.user_id ORDER BY r.uploaded_at DESC");
+// Handle search and filter
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$type_filter = isset($_GET['type']) ? $_GET['type'] : '';
+$format_filter = isset($_GET['format']) ? $_GET['format'] : '';
+
+// Build query based on filters
+$sql = "SELECT r.*, u.fullname as uploader_name FROM resources r JOIN users u ON r.uploaded_by = u.user_id WHERE 1=1";
+$params = [];
+
+if (!empty($search)) {
+     $sql .= " AND (r.title LIKE ? OR r.author LIKE ?)";
+     $params[] = "%$search%";
+     $params[] = "%$search%";
+}
+
+if (!empty($type_filter)) {
+     $sql .= " AND r.type = ?";
+     $params[] = $type_filter;
+}
+
+if (!empty($format_filter)) {
+     $sql .= " AND r.format = ?";
+     $params[] = $format_filter;
+}
+
+$sql .= " ORDER BY r.uploaded_at DESC";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
 $resources = $stmt->fetchAll();
 
 // Fetch user's borrowing history
 $stmt = $pdo->prepare("SELECT br.*, r.title, r.author FROM borrow_records br JOIN resources r ON br.resource_id = r.resource_id WHERE br.user_id = ? ORDER BY br.borrowed_at DESC");
 $stmt->execute([$_SESSION['user_id']]);
 $borrow_history = $stmt->fetchAll();
+
+// Get unique types and formats for filter dropdowns
+$type_stmt = $pdo->query("SELECT DISTINCT type FROM resources ORDER BY type");
+$types = $type_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+$format_stmt = $pdo->query("SELECT DISTINCT format FROM resources ORDER BY format");
+$formats = $format_stmt->fetchAll(PDO::FETCH_COLUMN);
 ?>
 
 <!DOCTYPE html>
@@ -144,6 +178,66 @@ $borrow_history = $stmt->fetchAll();
                gap: 10px;
           }
 
+          /* Search and Filter Styles */
+          .search-filter-container {
+               background: #f8f9fa;
+               padding: 20px;
+               border-radius: 8px;
+               margin-bottom: 25px;
+          }
+
+          .search-filter-form {
+               display: flex;
+               flex-wrap: wrap;
+               gap: 15px;
+               align-items: end;
+          }
+
+          .form-group {
+               flex: 1;
+               min-width: 200px;
+          }
+
+          label {
+               display: block;
+               margin-bottom: 5px;
+               font-weight: 500;
+               color: #555;
+          }
+
+          input[type="text"],
+          select {
+               width: 100%;
+               padding: 10px;
+               border: 1px solid #ddd;
+               border-radius: 5px;
+               font-size: 14px;
+          }
+
+          .btn {
+               background: #667eea;
+               color: white;
+               border: none;
+               padding: 10px 20px;
+               border-radius: 5px;
+               cursor: pointer;
+               font-size: 14px;
+               transition: background 0.3s;
+               height: fit-content;
+          }
+
+          .btn:hover {
+               background: #5a6fd8;
+          }
+
+          .btn-secondary {
+               background: #6c757d;
+          }
+
+          .btn-secondary:hover {
+               background: #5a6268;
+          }
+
           .resources-grid {
                display: grid;
                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -248,6 +342,12 @@ $borrow_history = $stmt->fetchAll();
                background: #cce5ff;
                color: #004085;
           }
+
+          .results-info {
+               margin-bottom: 20px;
+               color: #666;
+               font-style: italic;
+          }
      </style>
 </head>
 
@@ -273,6 +373,67 @@ $borrow_history = $stmt->fetchAll();
           </div>
 
           <div class="main-content">
+               <!-- Search and Filter Section -->
+               <div class="section">
+                    <h2 class="section-title"><i class="fas fa-filter"></i> Search & Filter Resources</h2>
+
+                    <div class="search-filter-container">
+                         <form method="GET" class="search-filter-form">
+                              <div class="form-group">
+                                   <label for="search"><i class="fas fa-search"></i> Search (Title/Author):</label>
+                                   <input type="text" id="search" name="search"
+                                        value="<?php echo htmlspecialchars($search); ?>"
+                                        placeholder="Enter title or author...">
+                              </div>
+
+                              <div class="form-group">
+                                   <label for="type"><i class="fas fa-book"></i> Type:</label>
+                                   <select id="type" name="type">
+                                        <option value="">All Types</option>
+                                        <?php foreach ($types as $type): ?>
+                                             <option value="<?php echo htmlspecialchars($type); ?>" <?php echo ($type_filter == $type) ? 'selected' : ''; ?>>
+                                                  <?php echo ucfirst(htmlspecialchars($type)); ?>
+                                             </option>
+                                        <?php endforeach; ?>
+                                   </select>
+                              </div>
+
+                              <div class="form-group">
+                                   <label for="format"><i class="fas fa-file"></i> Format:</label>
+                                   <select id="format" name="format">
+                                        <option value="">All Formats</option>
+                                        <?php foreach ($formats as $format): ?>
+                                             <option value="<?php echo htmlspecialchars($format); ?>" <?php echo ($format_filter == $format) ? 'selected' : ''; ?>>
+                                                  <?php echo htmlspecialchars($format); ?>
+                                             </option>
+                                        <?php endforeach; ?>
+                                   </select>
+                              </div>
+
+                              <button type="submit" class="btn">
+                                   <i class="fas fa-search"></i> Search
+                              </button>
+
+                              <?php if (!empty($search) || !empty($type_filter) || !empty($format_filter)): ?>
+                                   <a href="user_dashboard.php" class="btn btn-secondary">
+                                        <i class="fas fa-times"></i> Clear Filters
+                                   </a>
+                              <?php endif; ?>
+                         </form>
+                    </div>
+
+                    <div class="results-info">
+                         <?php
+                         $result_count = count($resources);
+                         if (!empty($search) || !empty($type_filter) || !empty($format_filter)):
+                              echo "Found <strong>$result_count</strong> resource(s) matching your criteria.";
+                         else:
+                              echo "Showing all <strong>$result_count</strong> available resources.";
+                         endif;
+                         ?>
+                    </div>
+               </div>
+
                <!-- Available Resources Section -->
                <div class="section">
                     <h2 class="section-title"><i class="fas fa-book-open"></i> Available Resources</h2>
@@ -305,7 +466,19 @@ $borrow_history = $stmt->fetchAll();
                          <?php endforeach; ?>
 
                          <?php if (empty($resources)): ?>
-                              <p>No resources available yet. Check back later!</p>
+                              <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                                   <i class="fas fa-book-open" style="font-size: 3em; color: #ccc; margin-bottom: 20px;"></i>
+                                   <h3>No resources found</h3>
+                                   <p>
+                                        <?php
+                                        if (!empty($search) || !empty($type_filter) || !empty($format_filter)):
+                                             echo "Try adjusting your search criteria or filters.";
+                                        else:
+                                             echo "No resources available yet. Check back later!";
+                                        endif;
+                                        ?>
+                                   </p>
+                              </div>
                          <?php endif; ?>
                     </div>
                </div>
