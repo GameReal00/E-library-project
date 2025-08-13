@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_resource'])) {
           $target_file = $upload_dir . $file_name;
 
           // Check file type
-          $allowed_types = ['pdf', 'epub', 'docX'];
+          $allowed_types = ['pdf', 'epub', 'docx'];
           $file_extension = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
 
           if (in_array($file_extension, $allowed_types)) {
